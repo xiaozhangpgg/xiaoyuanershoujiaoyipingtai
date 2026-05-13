@@ -9,7 +9,24 @@ export async function POST(request: Request) {
     // 验证必填字段
     if (!email || !password || !nickname || !studentId) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: '请填写所有必填字段' },
+        { status: 400 }
+      )
+    }
+
+    // 验证邮箱格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: '邮箱格式不正确' },
+        { status: 400 }
+      )
+    }
+
+    // 验证密码强度
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: '密码长度至少6位' },
         { status: 400 }
       )
     }
@@ -21,7 +38,7 @@ export async function POST(request: Request) {
 
     if (existingUser) {
       return NextResponse.json(
-        { error: 'Email already exists' },
+        { error: '该邮箱已被注册' },
         { status: 400 }
       )
     }
@@ -33,7 +50,7 @@ export async function POST(request: Request) {
 
     if (existingStudentId) {
       return NextResponse.json(
-        { error: 'Student ID already exists' },
+        { error: '该学号已被注册' },
         { status: 400 }
       )
     }
