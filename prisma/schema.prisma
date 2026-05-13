@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProductCondition {
+  NEW
+  LIKE_NEW
+  SLIGHTLY_USED
+  USED
+}
+
+enum ProductStatus {
+  ON_SALE
+  SOLD
+  OFF_SHELF
+}
+
+enum TransactionStatus {
+  PENDING
+  SELLER_CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  nickname  String
+  avatar    String?
+  studentId String   @unique
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  products      Product[]      @relation("SellerProducts")
+  favorites     Favorite[]
+  sentMessages  Message[]      @relation("SentMessages")
+  receivedMsgs  Message[]      @relation("ReceivedMessages")
+  conversations1 Conversation[] @relation("User1")
+  conversations2 Conversation[] @relation("User2")
+  soldTransactions  Transaction[] @relation("SellerTransactions")
+  boughtTransactions Transaction[] @relation("BuyerTransactions")
+}
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  products Product[]
+}
+
+model Product {
+  id          Int             @id @default(autoincrement())
+  title       String
+  description String
+  price       Float
+  images      String[]
+  condition   ProductCondition
+  location    String
+  status      ProductStatus   @default(ON_SALE)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  sellerId   Int
+  seller     User     @relation("SellerProducts", fields: [sellerId], references: [id])
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+  favorites    Favorite[]
+  messages     Message[]
+  conversations Conversation[]
+  transaction  Transaction?
+}
+
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+}
+
+model Message {
+  id         Int      @id @default(autoincrement())
+  content    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  senderId   Int
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId Int
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  productId  Int
+  product    Product  @relation(fields: [productId], references: [id])
+}
+
+model Conversation {
+  id            Int      @id @default(autoincrement())
+  lastMessageAt DateTime @default(now())
+
+  user1Id       Int
+  user1         User     @relation("User1", fields: [user1Id], references: [id])
+  user2Id       Int
+  user2         User     @relation("User2", fields: [user2Id], references: [id])
+  productId     Int
+  product       Product  @relation(fields: [productId], references: [id])
+
+  @@unique([user1Id, user2Id, productId])
+}
+
+model Transaction {
+  id                Int             @id @default(autoincrement())
+  price             Float
+  status            TransactionStatus @default(PENDING)
+  sellerConfirmedAt DateTime?
+  buyerConfirmedAt  DateTime?
+  createdAt         DateTime        @default(now())
+
+  productId  Int     @unique
+  product    Product @relation(fields: [productId], references: [id])
+  sellerId   Int
+  seller     User    @relation("SellerTransactions", fields: [sellerId], references: [id])
+  buyerId    Int
+  buyer      User    @relation("BuyerTransactions", fields: [buyerId], references: [id])
+}
