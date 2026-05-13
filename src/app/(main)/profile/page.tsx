@@ -14,6 +14,7 @@ import {
   Loader2,
   ChevronRight,
   Shield,
+  ArrowLeftRight,
 } from 'lucide-react'
 
 interface UserProfile {
@@ -136,7 +137,7 @@ export default function ProfilePage() {
       count: stats.favorites,
     },
     {
-      icon: Package,
+      icon: ArrowLeftRight,
       label: '我的交易',
       href: '/profile/transactions',
     },

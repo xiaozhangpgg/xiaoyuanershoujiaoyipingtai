@@ -44,9 +44,9 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const currentUserId = session?.user?.id ? parseInt(session.user.id, 10) : null
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  }, [])
 
   const fetchOtherUser = useCallback(async () => {
     try {
@@ -55,8 +55,8 @@ export default function ChatPage() {
         const data = await res.json()
         setOtherUser(data)
       }
-    } catch {
-      // Silently fail - we'll show ID as fallback
+    } catch (err) {
+      console.error('Failed to fetch user:', err)
     }
   }, [otherUserId])
 
@@ -113,12 +113,12 @@ export default function ChatPage() {
         }),
       })
 
+      const data = await res.json()
       if (!res.ok) {
-        const data = await res.json()
         throw new Error(data.error || '发送失败')
       }
 
-      const message = await res.json()
+      const message = data
       setMessages((prev) => [...prev, message])
       setNewMessage('')
     } catch (err) {
@@ -160,7 +160,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
         <button

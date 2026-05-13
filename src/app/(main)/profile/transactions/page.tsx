@@ -95,12 +95,12 @@ export default function TransactionsPage() {
         body: JSON.stringify({ action }),
       })
 
+      const data = await res.json()
       if (!res.ok) {
-        const data = await res.json()
         throw new Error(data.error || '操作失败')
       }
 
-      const updated = await res.json()
+      const updated = data
       setTransactions((prev) =>
         prev.map((t) => (t.id === transactionId ? updated : t))
       )
@@ -127,9 +127,12 @@ export default function TransactionsPage() {
       </header>
 
       {/* Tabs */}
-      <div className="flex bg-white border-b border-gray-200">
+      <div className="flex bg-white border-b border-gray-200" role="tablist">
         <button
+          role="tab"
+          aria-selected={activeTab === 'bought'}
           onClick={() => handleTabChange('bought')}
+          onKeyDown={(e) => { if (e.key === 'ArrowRight') handleTabChange('sold') }}
           className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
             activeTab === 'bought'
               ? 'text-green-600'
@@ -142,7 +145,10 @@ export default function TransactionsPage() {
           )}
         </button>
         <button
+          role="tab"
+          aria-selected={activeTab === 'sold'}
           onClick={() => handleTabChange('sold')}
+          onKeyDown={(e) => { if (e.key === 'ArrowLeft') handleTabChange('bought') }}
           className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
             activeTab === 'sold'
               ? 'text-green-600'

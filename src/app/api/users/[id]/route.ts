@@ -20,7 +20,6 @@ export async function GET(
         nickname: true,
         avatar: true,
         verified: true,
-        studentId: true,
       },
     })
 
