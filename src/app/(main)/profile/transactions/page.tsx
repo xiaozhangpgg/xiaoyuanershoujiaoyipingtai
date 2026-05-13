@@ -54,7 +54,8 @@ export default function TransactionsPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/transactions?role=${role}`)
+      const apiRole = role === 'bought' ? 'buyer' : 'seller'
+      const res = await fetch(`/api/transactions?role=${apiRole}`)
       if (!res.ok) {
         if (res.status === 401) {
           router.push('/login')

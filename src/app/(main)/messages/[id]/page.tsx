@@ -27,7 +27,7 @@ interface OtherUser {
 }
 
 export default function ChatPage() {
-  const { status } = useSession()
+  const { data: session, status } = useSession()
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -42,7 +42,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const currentUserIdRef = useRef<number | null>(null)
+  const currentUserId = session?.user?.id ? parseInt(session.user.id, 10) : null
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -215,13 +215,7 @@ export default function ChatPage() {
         )}
 
         {messages.map((msg) => {
-          const isOwn = msg.senderId === currentUserIdRef.current ||
-            (currentUserIdRef.current === null && msg.sender.id !== parseInt(otherUserId, 10))
-
-          // Cache current user ID from first message
-          if (currentUserIdRef.current === null && msg.sender.id !== parseInt(otherUserId, 10)) {
-            currentUserIdRef.current = msg.sender.id
-          }
+          const isOwn = msg.senderId === currentUserId
 
           return (
             <div
