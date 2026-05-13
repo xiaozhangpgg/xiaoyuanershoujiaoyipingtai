@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { Prisma } from '@prisma/client'
+
+// TODO: 添加速率限制（rate limiting）防止恶意注册
+// 建议使用 next-rate-limit 或 Upstash Ratelimit
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +18,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // 验证邮箱格式
+    // 邮箱格式验证和规范化
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       return NextResponse.json(
@@ -22,35 +26,35 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
+    const normalizedEmail = email.toLowerCase().trim()
 
-    // 验证密码强度
+    // 密码强度验证
     if (password.length < 6) {
       return NextResponse.json(
         { error: '密码长度至少6位' },
         { status: 400 }
       )
     }
-
-    // 检查邮箱是否已存在
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    })
-
-    if (existingUser) {
+    if (password.length > 128) {
       return NextResponse.json(
-        { error: '该邮箱已被注册' },
+        { error: '密码长度不能超过128位' },
         { status: 400 }
       )
     }
 
-    // 检查学号是否已存在
-    const existingStudentId = await prisma.user.findUnique({
-      where: { studentId },
-    })
-
-    if (existingStudentId) {
+    // 昵称长度验证
+    if (nickname.length > 50) {
       return NextResponse.json(
-        { error: '该学号已被注册' },
+        { error: '昵称长度不能超过50个字符' },
+        { status: 400 }
+      )
+    }
+
+    // 学号格式验证
+    const studentIdRegex = /^\d{6,20}$/
+    if (!studentIdRegex.test(studentId)) {
+      return NextResponse.json(
+        { error: '学号格式不正确，应为6-20位数字' },
         { status: 400 }
       )
     }
@@ -58,14 +62,14 @@ export async function POST(request: Request) {
     // 加密密码
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // 创建用户
+    // 创建用户（利用数据库唯一约束处理并发竞争）
     const user = await prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         nickname,
         studentId,
-        verified: false, // 需要学信网认证后才设为 true
+        verified: false,
       },
     })
 
@@ -75,9 +79,28 @@ export async function POST(request: Request) {
       nickname: user.nickname,
     })
   } catch (error) {
+    // 处理唯一约束冲突（P2002）- 并发注册时的竞态条件
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        const target = (error.meta?.target as string[]) || []
+        if (target.includes('email')) {
+          return NextResponse.json(
+            { error: '该邮箱已被注册' },
+            { status: 400 }
+          )
+        }
+        if (target.includes('studentId')) {
+          return NextResponse.json(
+            { error: '该学号已被注册' },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     console.error('Registration error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: '服务器内部错误，请稍后重试' },
       { status: 500 }
     )
   }

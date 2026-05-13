@@ -17,18 +17,23 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const result = await signIn('credentials', {
-      email,
-      password,
-      redirect: false,
-    })
+    try {
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      })
 
-    if (result?.error) {
-      setError('邮箱或密码错误')
+      if (result?.error) {
+        setError('邮箱或密码错误')
+        setLoading(false)
+      } else {
+        router.push('/')
+        router.refresh()
+      }
+    } catch {
+      setError('网络错误，请检查网络连接')
       setLoading(false)
-    } else {
-      router.push('/')
-      router.refresh()
     }
   }
 
@@ -41,6 +46,7 @@ export default function LoginPage() {
           <input
             type="email"
             placeholder="邮箱"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -52,6 +58,7 @@ export default function LoginPage() {
           <input
             type="password"
             placeholder="密码"
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"

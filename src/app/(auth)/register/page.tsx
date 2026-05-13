@@ -9,6 +9,7 @@ export default function RegisterPage() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    confirmPassword: '',
     nickname: '',
     studentId: '',
   })
@@ -24,11 +25,22 @@ export default function RegisterPage() {
     setLoading(true)
     setError('')
 
+    if (formData.password !== formData.confirmPassword) {
+      setError('两次输入的密码不一致')
+      setLoading(false)
+      return
+    }
+
     try {
       const response = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          nickname: formData.nickname,
+          studentId: formData.studentId,
+        }),
       })
 
       const data = await response.json()
@@ -41,7 +53,7 @@ export default function RegisterPage() {
 
       router.push('/login')
     } catch {
-      setError('注册失败，请重试')
+      setError('网络错误，请检查网络连接')
       setLoading(false)
     }
   }
@@ -56,6 +68,7 @@ export default function RegisterPage() {
             type="email"
             name="email"
             placeholder="邮箱"
+            autoComplete="email"
             value={formData.email}
             onChange={handleChange}
             className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -68,7 +81,21 @@ export default function RegisterPage() {
             type="password"
             name="password"
             placeholder="密码"
+            autoComplete="new-password"
             value={formData.password}
+            onChange={handleChange}
+            className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+            required
+          />
+        </div>
+
+        <div>
+          <input
+            type="password"
+            name="confirmPassword"
+            placeholder="确认密码"
+            autoComplete="new-password"
+            value={formData.confirmPassword}
             onChange={handleChange}
             className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             required
@@ -80,6 +107,7 @@ export default function RegisterPage() {
             type="text"
             name="nickname"
             placeholder="昵称"
+            autoComplete="nickname"
             value={formData.nickname}
             onChange={handleChange}
             className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -92,21 +120,13 @@ export default function RegisterPage() {
             type="text"
             name="studentId"
             placeholder="学号"
+            autoComplete="off"
             value={formData.studentId}
             onChange={handleChange}
             className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             required
           />
         </div>
-
-        {/* 学信网照片上传 - 暂时注释，后续实现 */}
-        {/* <div>
-          <input
-            type="file"
-            accept="image/*"
-            className="w-full px-4 py-3 border rounded-lg"
-          />
-        </div> */}
 
         {error && (
           <p className="text-red-500 text-sm">{error}</p>

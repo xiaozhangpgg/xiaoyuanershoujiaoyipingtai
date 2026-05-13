@@ -48,8 +48,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: '/login',
   },
   callbacks: {
-    authorized({ auth }) {
-      return !!auth
+    authorized({ auth, request }) {
+      const isLoggedIn = !!auth
+      const { pathname } = request.nextUrl
+
+      // 已登录用户访问登录/注册页面时重定向到首页
+      if (isLoggedIn && (pathname === '/login' || pathname === '/register')) {
+        return Response.redirect(new URL('/', request.url))
+      }
+
+      return isLoggedIn
     },
     async jwt({ token, user }) {
       if (user) {
