@@ -52,9 +52,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const isLoggedIn = !!auth
       const { pathname } = request.nextUrl
 
+      // API 路由由 NextAuth handlers 自行处理，不做拦截
+      if (pathname.startsWith('/api')) {
+        return true
+      }
+
       // 已登录用户访问登录/注册页面时重定向到首页
       if (isLoggedIn && (pathname === '/login' || pathname === '/register')) {
         return Response.redirect(new URL('/', request.url))
+      }
+
+      // 未登录用户允许访问登录/注册页面
+      if (pathname === '/login' || pathname === '/register') {
+        return true
       }
 
       return isLoggedIn
