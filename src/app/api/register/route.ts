@@ -2,12 +2,26 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { Prisma } from '@prisma/client'
-
-// TODO: 添加速率限制（rate limiting）防止恶意注册
-// 建议使用 next-rate-limit 或 Upstash Ratelimit
+import { registerLimiter } from '@/lib/rate-limit'
 
 export async function POST(request: Request) {
   try {
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    const { allowed, remaining, resetIn } = registerLimiter.check(`register:${clientIp}`)
+
+    if (!allowed) {
+      return NextResponse.json(
+        { error: `请求过于频繁，请在 ${resetIn} 秒后重试` },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(resetIn),
+            'X-RateLimit-Remaining': String(remaining),
+          },
+        }
+      )
+    }
+
     const { email, password, nickname, studentId } = await request.json()
 
     // 验证必填字段
@@ -29,15 +43,21 @@ export async function POST(request: Request) {
     const normalizedEmail = email.toLowerCase().trim()
 
     // 密码强度验证
-    if (password.length < 6) {
+    if (password.length < 8) {
       return NextResponse.json(
-        { error: '密码长度至少6位' },
+        { error: '密码长度至少8位' },
         { status: 400 }
       )
     }
     if (password.length > 128) {
       return NextResponse.json(
         { error: '密码长度不能超过128位' },
+        { status: 400 }
+      )
+    }
+    if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+      return NextResponse.json(
+        { error: '密码必须包含字母和数字' },
         { status: 400 }
       )
     }
@@ -60,7 +80,7 @@ export async function POST(request: Request) {
     }
 
     // 加密密码
-    const hashedPassword = await bcrypt.hash(password, 10)
+    const hashedPassword = await bcrypt.hash(password, 12)
 
     // 创建用户（利用数据库唯一约束处理并发竞争）
     const user = await prisma.user.create({

@@ -38,7 +38,6 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         nickname: true,
-        studentId: true,
         avatar: true,
       },
       take: 20,

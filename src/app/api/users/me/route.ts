@@ -20,8 +20,6 @@ export async function GET() {
       select: {
         id: true,
         nickname: true,
-        email: true,
-        studentId: true,
         avatar: true,
         verified: true,
       },

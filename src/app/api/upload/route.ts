@@ -3,8 +3,7 @@ import { auth } from '@/lib/auth'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
-
-// TODO: 添加速率限制防止滥用上传
+import { uploadLimiter } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +11,21 @@ export async function POST(request: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: '请先登录' }, { status: 401 })
+    }
+
+    const { allowed, remaining, resetIn } = uploadLimiter.check(`upload:${session.user.id}`)
+
+    if (!allowed) {
+      return NextResponse.json(
+        { error: `上传过于频繁，请在 ${resetIn} 秒后重试` },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(resetIn),
+            'X-RateLimit-Remaining': String(remaining),
+          },
+        }
+      )
     }
 
     const formData = await request.formData()
@@ -39,6 +53,24 @@ export async function POST(request: NextRequest) {
 
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
+
+    const magicBytesMap: Record<string, number[]> = {
+      'image/jpeg': [0xFF, 0xD8, 0xFF],
+      'image/png': [0x89, 0x50, 0x4E, 0x47],
+      'image/webp': [0x52, 0x49, 0x46, 0x46],
+      'image/gif': [0x47, 0x49, 0x46, 0x38],
+    }
+
+    const expectedMagic = magicBytesMap[file.type]
+    if (expectedMagic) {
+      const isValid = expectedMagic.every((byte, i) => buffer[i] === byte)
+      if (!isValid) {
+        return NextResponse.json(
+          { error: '文件内容与类型不匹配，已被拒绝' },
+          { status: 400 }
+        )
+      }
+    }
 
     // 从 MIME 类型推断扩展名，不信任用户文件名
     const extMap: Record<string, string> = {

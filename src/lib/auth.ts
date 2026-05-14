@@ -2,6 +2,7 @@ import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
+import { loginLimiter } from './rate-limit'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -15,8 +16,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
+        const emailKey = (credentials.email as string).toLowerCase().trim()
+        const { allowed } = loginLimiter.check(`login:${emailKey}`)
+
+        if (!allowed) {
+          throw new Error('登录尝试过于频繁，请15分钟后再试')
+        }
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email: emailKey },
         })
 
         if (!user) {
@@ -32,6 +40,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
+        loginLimiter.reset(`login:${emailKey}`)
+
         return {
           id: user.id.toString(),
           email: user.email,
@@ -43,6 +53,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   session: {
     strategy: 'jwt',
+    maxAge: 7 * 24 * 60 * 60,
   },
   pages: {
     signIn: '/login',
