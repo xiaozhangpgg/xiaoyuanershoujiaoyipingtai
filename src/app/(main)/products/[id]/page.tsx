@@ -74,6 +74,8 @@ export default function ProductDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [currentImage, setCurrentImage] = useState(0)
   const [showMarkSold, setShowMarkSold] = useState(false)
+  const [favorited, setFavorited] = useState(false)
+  const [togglingFav, setTogglingFav] = useState(false)
 
   const productId = params.id as string
 
@@ -102,6 +104,35 @@ export default function ProductDetailPage() {
   useEffect(() => {
     fetchProduct()
   }, [fetchProduct])
+
+  // Check favorite status
+  useEffect(() => {
+    if (!session?.user?.id || !productId) return
+    fetch(`/api/favorites/check?productId=${productId}`)
+      .then((res) => res.json())
+      .then((data) => setFavorited(data.favorited))
+      .catch(() => {})
+  }, [session?.user?.id, productId])
+
+  const toggleFavorite = async () => {
+    if (togglingFav) return
+    setTogglingFav(true)
+    try {
+      const res = await fetch('/api/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: Number(productId) }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setFavorited(data.favorited)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setTogglingFav(false)
+    }
+  }
 
   const isSeller = !!session?.user?.id && !!product && product.sellerId === Number(session.user.id)
   const parsedPrice = product ? parseFloat(product.price) : 0
@@ -284,12 +315,19 @@ export default function ProductDetailPage() {
             )
           ) : (
             <>
-              <button aria-label="收藏商品" className="flex flex-col items-center gap-0.5 text-gray-500 hover:text-red-500 transition-colors px-2">
-                <Heart className="w-5 h-5" />
-                <span className="text-xs">收藏</span>
+              <button
+                onClick={toggleFavorite}
+                disabled={togglingFav}
+                aria-label={favorited ? '取消收藏' : '收藏商品'}
+                className={`flex flex-col items-center gap-0.5 transition-colors px-2 ${
+                  favorited ? 'text-red-500' : 'text-gray-500 hover:text-red-500'
+                } ${togglingFav ? 'opacity-50' : ''}`}
+              >
+                <Heart className={`w-5 h-5 ${favorited ? 'fill-current' : ''}`} />
+                <span className="text-xs">{favorited ? '已收藏' : '收藏'}</span>
               </button>
               <Link
-                href={`/messages?sellerId=${product.sellerId}&productId=${product.id}`}
+                href={`/messages/${product.sellerId}?productId=${product.id}`}
                 className="flex-1 h-10 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition-colors flex items-center justify-center gap-1.5"
               >
                 <MessageCircle className="w-4 h-4" />

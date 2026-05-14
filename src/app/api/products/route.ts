@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { ProductCondition, ProductStatus, Prisma } from '@prisma/client'
+import { ProductCondition, Prisma } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,8 +14,19 @@ export async function GET(request: NextRequest) {
     const maxPrice = searchParams.get('maxPrice')
     const location = searchParams.get('location')
 
-    const where: Prisma.ProductWhereInput = {
-      status: 'ON_SALE',
+    const sellerId = searchParams.get('sellerId')
+
+    const where: Prisma.ProductWhereInput = {}
+
+    // When filtering by seller (my products), show all statuses
+    if (sellerId === 'me') {
+      const session = await auth()
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: '请先登录' }, { status: 401 })
+      }
+      where.sellerId = parseInt(session.user.id, 10)
+    } else {
+      where.status = 'ON_SALE'
     }
 
     if (category) {
