@@ -4,6 +4,12 @@ services:
     image: postgres:15
     container_name: campus-marketplace-db
     restart: always
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+      - /run/postgresql
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

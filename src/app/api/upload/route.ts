@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     const uploadDir = path.join(process.cwd(), 'public', 'uploads')
     await mkdir(uploadDir, { recursive: true })
 
-    const filePath = path.join(uploadDir, uniqueName)
+    const filePath = `${uploadDir}/${uniqueName}`
     await writeFile(filePath, buffer)
 
     return NextResponse.json({ url: `/uploads/${uniqueName}` })
