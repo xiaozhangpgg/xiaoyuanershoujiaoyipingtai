@@ -33,8 +33,9 @@ model User {
   nickname  String
   avatar    String?
   studentId String   @unique
-  verified  Boolean  @default(false)
-  createdAt DateTime @default(now())
+  verified            Boolean  @default(false)
+  verificationImage   String?
+  createdAt           DateTime @default(now())
 
   products      Product[]      @relation("SellerProducts")
   favorites     Favorite[]

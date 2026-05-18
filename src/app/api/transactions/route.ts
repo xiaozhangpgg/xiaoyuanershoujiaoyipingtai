@@ -19,18 +19,32 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const role = searchParams.get('role')
     const status = searchParams.get('status')
+    const productIdParam = searchParams.get('productId')
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20))
 
     const where: Prisma.TransactionWhereInput = {}
 
-    // 按角色过滤
-    if (role === 'buyer') {
-      where.buyerId = userId
-    } else if (role === 'seller') {
-      where.sellerId = userId
-    } else {
+    // 按商品过滤
+    if (productIdParam) {
+      const pid = parseInt(productIdParam, 10)
+      if (isNaN(pid)) {
+        return NextResponse.json({ error: '商品ID无效' }, { status: 400 })
+      }
+      where.productId = pid
+      // 查看商品交易时，只显示与当前用户相关的交易
       where.OR = [{ buyerId: userId }, { sellerId: userId }]
+    }
+
+    // 按角色过滤（仅在没有按商品过滤时生效）
+    if (!productIdParam) {
+      if (role === 'buyer') {
+        where.buyerId = userId
+      } else if (role === 'seller') {
+        where.sellerId = userId
+      } else {
+        where.OR = [{ buyerId: userId }, { sellerId: userId }]
+      }
     }
 
     // 按状态过滤
@@ -100,17 +114,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '请先登录' }, { status: 401 })
     }
 
-    const sellerId = parseInt(session.user.id, 10)
-    if (isNaN(sellerId)) {
+    const buyerId = parseInt(session.user.id, 10)
+    if (isNaN(buyerId)) {
       return NextResponse.json({ error: '用户身份无效' }, { status: 401 })
     }
 
     const body = await request.json()
-    const { productId, buyerId, price } = body
+    const { productId } = body
 
     // 参数验证
-    if (!productId || !buyerId || price === undefined) {
-      return NextResponse.json({ error: '请填写所有必填字段' }, { status: 400 })
+    if (!productId) {
+      return NextResponse.json({ error: '请提供商品ID' }, { status: 400 })
     }
 
     const parsedProductId = parseInt(productId, 10)
@@ -118,37 +132,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '商品ID无效' }, { status: 400 })
     }
 
-    const parsedBuyerId = parseInt(buyerId, 10)
-    if (isNaN(parsedBuyerId)) {
-      return NextResponse.json({ error: '买家ID无效' }, { status: 400 })
-    }
-
-    // 不能与自己交易
-    if (parsedBuyerId === sellerId) {
-      return NextResponse.json({ error: '不能与自己进行交易' }, { status: 400 })
-    }
-
-    const parsedPrice = parseFloat(price)
-    if (isNaN(parsedPrice) || parsedPrice <= 0 || parsedPrice > 99999999.99) {
-      return NextResponse.json({ error: '价格无效，应为0-99999999.99之间的正数' }, { status: 400 })
-    }
-
     // 使用事务确保原子性（将所有检查移入事务内）
     const transaction = await prisma.$transaction(async (tx) => {
-      // 验证买家存在
-      const buyer = await tx.user.findUnique({
-        where: { id: parsedBuyerId },
-        select: { id: true },
-      })
-
-      if (!buyer) {
-        throw new Prisma.PrismaClientKnownRequestError('买家不存在', {
-          code: 'P2025',
-          clientVersion: '1.0',
-        })
-      }
-
-      // 验证商品存在且属于当前卖家且在售
+      // 验证商品存在且在售
       const product = await tx.product.findUnique({
         where: { id: parsedProductId },
       })
@@ -160,15 +146,18 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      if (product.sellerId !== sellerId) {
-        throw new Prisma.PrismaClientKnownRequestError('只能为自己的商品创建交易', {
+      if (product.status !== ProductStatus.ON_SALE) {
+        throw new Prisma.PrismaClientKnownRequestError('该商品不在出售中', {
           code: 'P2025',
           clientVersion: '1.0',
         })
       }
 
-      if (product.status !== ProductStatus.ON_SALE) {
-        throw new Prisma.PrismaClientKnownRequestError('该商品不在出售中', {
+      const sellerId = product.sellerId
+
+      // 不能与自己交易
+      if (buyerId === sellerId) {
+        throw new Prisma.PrismaClientKnownRequestError('不能购买自己的商品', {
           code: 'P2025',
           clientVersion: '1.0',
         })
@@ -189,10 +178,10 @@ export async function POST(request: NextRequest) {
       // 创建交易并更新商品状态
       const newTransaction = await tx.transaction.create({
         data: {
-          price: parsedPrice,
+          price: product.price,
           productId: parsedProductId,
           sellerId,
-          buyerId: parsedBuyerId,
+          buyerId,
         },
         include: {
           product: {

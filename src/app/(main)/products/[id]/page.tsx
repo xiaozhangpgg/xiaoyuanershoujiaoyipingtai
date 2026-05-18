@@ -18,8 +18,16 @@ import {
   PackageOpen,
 } from 'lucide-react'
 import { conditionLabels } from '@/types'
-import { ProductCondition, ProductStatus } from '@prisma/client'
-import MarkSoldModal from '@/components/MarkSoldModal'
+import { ProductCondition, ProductStatus, TransactionStatus } from '@prisma/client'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 interface Seller {
   id: number
@@ -49,6 +57,14 @@ interface ProductDetail {
   category: Category
 }
 
+interface TransactionInfo {
+  id: number
+  status: TransactionStatus
+  buyerId: number
+  sellerId: number
+  price: string
+}
+
 function formatDate(dateStr: string) {
   const date = new Date(dateStr)
   const now = new Date()
@@ -73,9 +89,16 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentImage, setCurrentImage] = useState(0)
-  const [showMarkSold, setShowMarkSold] = useState(false)
   const [favorited, setFavorited] = useState(false)
   const [togglingFav, setTogglingFav] = useState(false)
+  const [transaction, setTransaction] = useState<TransactionInfo | null>(null)
+  const [showDelistDialog, setShowDelistDialog] = useState(false)
+  const [delisting, setDelisting] = useState(false)
+  const [showBuyDialog, setShowBuyDialog] = useState(false)
+  const [buying, setBuying] = useState(false)
+  const [buyError, setBuyError] = useState('')
+  const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   const productId = params.id as string
 
@@ -113,6 +136,88 @@ export default function ProductDetailPage() {
       .then((data) => setFavorited(data.favorited))
       .catch(() => {})
   }, [session?.user?.id, productId])
+
+  // Fetch transaction info when product is SOLD
+  useEffect(() => {
+    if (!session?.user?.id || !product || product.status !== ProductStatus.SOLD) {
+      setTransaction(null)
+      return
+    }
+    fetch(`/api/transactions?productId=${product.id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.transactions && data.transactions.length > 0) {
+          setTransaction(data.transactions[0])
+        }
+      })
+      .catch(() => {})
+  }, [session?.user?.id, product])
+
+  const handleDelist = async () => {
+    if (!product) return
+    setDelisting(true)
+    try {
+      const res = await fetch(`/api/products/${product.id}`, { method: 'PATCH' })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || '下架失败')
+        return
+      }
+      setShowDelistDialog(false)
+      fetchProduct()
+    } catch {
+      alert('网络错误，请重试')
+    } finally {
+      setDelisting(false)
+    }
+  }
+
+  const handleBuy = async () => {
+    if (!product) return
+    setBuying(true)
+    setBuyError('')
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: product.id }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setBuyError(data.error || '交易失败')
+        setBuying(false)
+        return
+      }
+      setShowBuyDialog(false)
+      fetchProduct()
+    } catch {
+      setBuyError('网络错误，请重试')
+      setBuying(false)
+    }
+  }
+
+  const handleCancelTransaction = async () => {
+    if (!transaction) return
+    setCancelling(true)
+    try {
+      const res = await fetch(`/api/transactions/${transaction.id}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel' }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || '取消失败')
+        return
+      }
+      setShowCancelDialog(false)
+      fetchProduct()
+    } catch {
+      alert('网络错误，请重试')
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   const toggleFavorite = async () => {
     if (togglingFav) return
@@ -221,6 +326,15 @@ export default function ProductDetailPage() {
             </span>
           </div>
         )}
+
+        {/* Off-shelf overlay */}
+        {product.status === ProductStatus.OFF_SHELF && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <span className="text-white text-2xl font-bold -rotate-12 border-2 border-white px-4 py-1 rounded-lg">
+              已下架
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Product Info */}
@@ -303,17 +417,20 @@ export default function ProductDetailPage() {
           {isSeller ? (
             product.status === ProductStatus.ON_SALE ? (
               <button
-                onClick={() => setShowMarkSold(true)}
-                className="flex-1 h-10 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition-colors"
+                onClick={() => setShowDelistDialog(true)}
+                className="flex-1 h-10 bg-red-500 text-white text-sm font-medium rounded-full hover:bg-red-600 transition-colors"
               >
-                标记已售
+                下架
               </button>
-            ) : (
-              <div className="flex-1 h-10 flex items-center justify-center text-sm text-gray-400">
-                该商品已售出
-              </div>
-            )
-          ) : (
+            ) : product.status === ProductStatus.SOLD && transaction?.status === TransactionStatus.PENDING ? (
+              <button
+                onClick={() => setShowCancelDialog(true)}
+                className="flex-1 h-10 bg-gray-500 text-white text-sm font-medium rounded-full hover:bg-gray-600 transition-colors"
+              >
+                取消交易
+              </button>
+            ) : null
+          ) : product.status === ProductStatus.ON_SALE ? (
             <>
               <button
                 onClick={toggleFavorite}
@@ -326,26 +443,116 @@ export default function ProductDetailPage() {
                 <Heart className={`w-5 h-5 ${favorited ? 'fill-current' : ''}`} />
                 <span className="text-xs">{favorited ? '已收藏' : '收藏'}</span>
               </button>
+              <button
+                onClick={() => setShowBuyDialog(true)}
+                className="h-10 px-5 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition-colors"
+              >
+                交易
+              </button>
               <Link
                 href={`/messages/${product.sellerId}?productId=${product.id}`}
-                className="flex-1 h-10 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition-colors flex items-center justify-center gap-1.5"
+                className="flex-1 h-10 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-full hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
               >
                 <MessageCircle className="w-4 h-4" />
                 联系卖家
               </Link>
             </>
-          )}
+          ) : product.status === ProductStatus.SOLD && transaction?.status === TransactionStatus.PENDING ? (
+            <button
+              onClick={() => setShowCancelDialog(true)}
+              className="flex-1 h-10 bg-gray-500 text-white text-sm font-medium rounded-full hover:bg-gray-600 transition-colors"
+            >
+              取消交易
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {/* Mark Sold Modal */}
-      <MarkSoldModal
-        open={showMarkSold}
-        onOpenChange={setShowMarkSold}
-        productId={product.id}
-        productPrice={displayPrice}
-        onSuccess={fetchProduct}
-      />
+      {/* Delist Confirmation Dialog */}
+      <Dialog open={showDelistDialog} onOpenChange={setShowDelistDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认下架</DialogTitle>
+            <DialogDescription>
+              下架后商品将不再显示在商品列表中，买家将无法看到此商品。你可以随时重新上架。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDelistDialog(false)}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelist}
+              disabled={delisting}
+            >
+              {delisting ? '下架中...' : '确认下架'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Buy Confirmation Dialog */}
+      <Dialog open={showBuyDialog} onOpenChange={setShowBuyDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认交易</DialogTitle>
+            <DialogDescription>
+              你将购买此商品，价格为 ¥{displayPrice.toFixed(2)}。交易创建后卖家将收到通知。
+            </DialogDescription>
+          </DialogHeader>
+          {buyError && (
+            <p className="text-sm text-red-500">{buyError}</p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowBuyDialog(false)
+                setBuyError('')
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleBuy}
+              disabled={buying}
+            >
+              {buying ? '提交中...' : '确认交易'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Transaction Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>取消交易</DialogTitle>
+            <DialogDescription>
+              确定要取消此交易吗？取消后商品将恢复为在售状态。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCancelDialog(false)}
+            >
+              返回
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelTransaction}
+              disabled={cancelling}
+            >
+              {cancelling ? '取消中...' : '确认取消'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
