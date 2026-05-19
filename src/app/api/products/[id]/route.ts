@@ -155,6 +155,70 @@ export async function PUT(
   }
 }
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth()
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: '请先登录' }, { status: 401 })
+    }
+
+    const { id } = await params
+    const productId = parseInt(id)
+
+    if (isNaN(productId)) {
+      return NextResponse.json({ error: '无效的商品ID' }, { status: 400 })
+    }
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    })
+
+    if (!product) {
+      return NextResponse.json({ error: '商品不存在' }, { status: 404 })
+    }
+
+    if (product.sellerId !== parseInt(session.user.id)) {
+      return NextResponse.json({ error: '无权操作此商品' }, { status: 403 })
+    }
+
+    if (product.status !== ProductStatus.ON_SALE) {
+      return NextResponse.json({ error: '该商品不在出售中' }, { status: 400 })
+    }
+
+    // 检查是否有进行中的交易
+    const pendingTransaction = await prisma.transaction.findFirst({
+      where: {
+        productId,
+        status: 'PENDING',
+      },
+    })
+
+    if (pendingTransaction) {
+      return NextResponse.json(
+        { error: '该商品有进行中的交易，请先取消交易后再下架' },
+        { status: 400 }
+      )
+    }
+
+    const updated = await prisma.product.update({
+      where: { id: productId },
+      data: { status: ProductStatus.OFF_SHELF },
+    })
+
+    return NextResponse.json(updated)
+  } catch (error) {
+    console.error('下架商品失败:', error)
+    return NextResponse.json(
+      { error: '下架失败，请稍后重试' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
