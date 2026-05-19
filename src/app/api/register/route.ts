@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { email, password, nickname, studentId } = await request.json()
+    const { email, password, nickname, studentId, verificationImage } = await request.json()
 
     // 验证必填字段
     if (!email || !password || !nickname || !studentId) {
@@ -90,6 +90,7 @@ export async function POST(request: Request) {
         nickname,
         studentId,
         verified: false,
+        verificationImage: verificationImage || null,
       },
     })
 

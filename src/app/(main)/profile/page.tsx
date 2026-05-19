@@ -15,7 +15,18 @@ import {
   ChevronRight,
   Shield,
   ArrowLeftRight,
+  Trash2,
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 
 interface UserProfile {
   id: number
@@ -82,6 +93,42 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     await signOut({ callbackUrl: '/login' })
+  }
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      setDeleteError('请输入密码')
+      return
+    }
+
+    setDeleting(true)
+    setDeleteError('')
+
+    try {
+      const res = await fetch('/api/users/me', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: deletePassword }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setDeleteError(data.error || '注销失败')
+        setDeleting(false)
+        return
+      }
+
+      await signOut({ callbackUrl: '/login' })
+    } catch {
+      setDeleteError('网络错误，请重试')
+      setDeleting(false)
+    }
   }
 
   if (status === 'loading' || loading) {
@@ -222,6 +269,16 @@ export default function ProfilePage() {
             )
           })}
 
+          {/* Delete Account */}
+          <button
+            onClick={() => setShowDeleteDialog(true)}
+            aria-label="注销账号"
+            className="flex items-center gap-3 w-full px-4 py-3.5 hover:bg-gray-50 transition-colors"
+          >
+            <Trash2 className="w-5 h-5 text-red-500" />
+            <span className="text-sm text-red-500">注销账号</span>
+          </button>
+
           {/* Logout */}
           <button
             onClick={handleLogout}
@@ -233,6 +290,52 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      {/* Delete Account Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>注销账号</DialogTitle>
+            <DialogDescription>
+              此操作将永久删除你的账号及所有数据（发布商品、消息、交易记录等），且不可恢复。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">请输入密码以确认注销：</p>
+            <Input
+              type="password"
+              placeholder="输入密码"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              autoComplete="current-password"
+            />
+            {deleteError && (
+              <p className="text-sm text-red-500">{deleteError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false)
+                setDeletePassword('')
+                setDeleteError('')
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={deleting}
+            >
+              {deleting ? '注销中...' : '确认注销'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
