@@ -10,7 +10,7 @@ export const prisma = globalForPrisma.prisma ?? (() => {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.DATABASE_URL?.includes('supabase.co')
-      ? { rejectUnauthorized: true, ca: undefined }
+      ? { rejectUnauthorized: false }
       : process.env.NODE_ENV === 'production'
         ? { rejectUnauthorized: true }
         : undefined,
