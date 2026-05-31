@@ -78,7 +78,6 @@ npm run dev
 │   │   └── ui/          # shadcn/ui 基础组件
 │   ├── lib/             # 工具库与配置
 │   └── types/           # TypeScript 类型定义
-├── docs/                # 项目文档与设计方案
 └── docker-compose.yml   # Docker 开发环境
 ```
 
